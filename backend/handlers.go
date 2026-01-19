@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/google/uuid"
 	"github.com/honeynet/ochi/backend/entities"
 
 	"github.com/julienschmidt/httprouter"
@@ -341,5 +342,51 @@ func (cs *server) getEventByIDHandler(w http.ResponseWriter, r *http.Request, p 
 	w.WriteHeader(http.StatusOK)
 	if err = json.NewEncoder(w).Encode(event); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// downloadBinaryHandler serves the binary for the requested architecture with a new sensor UUID injected.
+func (cs *server) downloadBinaryHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	osType := p.ByName("os")
+	arch := p.ByName("arch")
+
+	// Construct the path to the binary.
+	// We assume a naming convention like "bin/sensor-{os}-{arch}".
+	binaryPath := "bin/sensor-" + osType + "-" + arch
+
+	// Read the binary file.
+	// Note: For very large binaries, we might want to stream and replace on the fly,
+	// but for typical sensor binaries, reading into memory is acceptable.
+	data, err := os.ReadFile(binaryPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			http.Error(w, "Binary not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Generate a new UUID.
+	newUUID := uuid.New().String()
+
+	// The placeholder UUID to look for.
+	placeHolderUUID := "00000000-0000-0000-0000-000000000000"
+
+	// Replace the placeholder with the new UUID.
+	// We pass a copy of data to avoid modifying the original if we were caching (though ReadFile returns a fresh slice).
+	// Since we are modifying 'data' in place via IndexReplace (which takes slice), be mindful.
+	// IndexReplace modifies the underlying array if capacity allows or returns the same slice.
+	// Here we want to search and replace.
+	modifiedData := IndexReplace(data, []byte(placeHolderUUID), []byte(newUUID))
+
+	// Set headers.
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment; filename=\"sensor-"+osType+"-"+arch+"\"")
+
+	// Write the modified data.
+	if _, err := w.Write(modifiedData); err != nil {
+		// Can't really do much here if headers are already sent, but we log or ignore.
+		return
 	}
 }
