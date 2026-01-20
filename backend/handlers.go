@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"os"
 
@@ -367,10 +368,7 @@ func (cs *server) downloadBinaryHandler(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Generate a new UUID.
 	newUUID := uuid.New().String()
-
-	// The placeholder UUID to look for.
 	placeHolderUUID := "00000000-0000-0000-0000-000000000000"
 
 	// Replace the placeholder with the new UUID.
@@ -386,7 +384,7 @@ func (cs *server) downloadBinaryHandler(w http.ResponseWriter, r *http.Request, 
 
 	// Write the modified data.
 	if _, err := w.Write(modifiedData); err != nil {
-		// Can't really do much here if headers are already sent, but we log or ignore.
+		log.Println("Failed to write binary: ", err)
 		return
 	}
 }

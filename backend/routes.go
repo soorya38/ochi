@@ -51,7 +51,8 @@ func newRouter(cs *server) (*httprouter.Router, error) {
 	r.GET("/api/events/:id", handlers.CorsMiddleware(handlers.BearerMiddleware(cs.getEventByIDHandler, os.Args[3])))
 
 	// download
-	r.GET("/download/:os/:arch", handlers.CorsMiddleware(handlers.BearerMiddleware(cs.downloadBinaryHandler, os.Args[3])))
+	r.GET("/download/:os/:arch", handlers.CorsMiddleware(
+		handlers.BearerMiddleware(cs.downloadBinaryHandler, os.Args[3])))
 
 	return r, nil
 }
