@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"os"
 
@@ -351,13 +350,26 @@ func (cs *server) downloadBinaryHandler(w http.ResponseWriter, r *http.Request, 
 	osType := p.ByName("os")
 	arch := p.ByName("arch")
 
-	// Construct the path to the binary.
-	// We assume a naming convention like "bin/sensor-{os}-{arch}".
+	validOS := map[string]bool{
+		"linux":   true,
+		"darwin":  true,
+		"windows": true,
+		"openbsd": true,
+	}
+
+	validArch := map[string]bool{
+		"amd64": true,
+		"arm64": true,
+		"386":   true,
+	}
+
+	if !validOS[osType] || !validArch[arch] {
+		http.Error(w, "Invalid parameters", http.StatusBadRequest)
+		return
+	}
+
 	binaryPath := "bin/sensor-" + osType + "-" + arch
 
-	// Read the binary file.
-	// Note: For very large binaries, we might want to stream and replace on the fly,
-	// but for typical sensor binaries, reading into memory is acceptable.
 	data, err := os.ReadFile(binaryPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -371,20 +383,13 @@ func (cs *server) downloadBinaryHandler(w http.ResponseWriter, r *http.Request, 
 	newUUID := uuid.New().String()
 	placeHolderUUID := "00000000-0000-0000-0000-000000000000"
 
-	// Replace the placeholder with the new UUID.
-	// We pass a copy of data to avoid modifying the original if we were caching (though ReadFile returns a fresh slice).
-	// Since we are modifying 'data' in place via IndexReplace (which takes slice), be mindful.
-	// IndexReplace modifies the underlying array if capacity allows or returns the same slice.
-	// Here we want to search and replace.
 	modifiedData := IndexReplace(data, []byte(placeHolderUUID), []byte(newUUID))
 
-	// Set headers.
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", "attachment; filename=\"sensor-"+osType+"-"+arch+"\"")
 
-	// Write the modified data.
 	if _, err := w.Write(modifiedData); err != nil {
-		log.Println("Failed to write binary: ", err)
+		http.Error(w, "Failed to write binary", http.StatusInternalServerError)
 		return
 	}
 }
